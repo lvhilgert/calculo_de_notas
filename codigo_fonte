@@ -1,0 +1,2173 @@
+import os, pyautogui, time, openpyxl
+from tkinter import *
+from tkinter import ttk
+from datetime import datetime
+from openpyxl.utils import get_column_letter, column_index_from_string
+
+# ====================================================Configurações da janela principal====================================================
+# Falta fazer:
+# filtro por nome de prova na tela de buscar provas: DECIDI NÃO FAZER, POIS COMO ESTOU DIVIDINDO POR SEMESTRE / TRIMESTRE, VÃO SER POUCAS PROVAS.
+# gravar acertos dos alunos na planilha da prova.
+
+
+root = Tk()
+
+w = 1400  # width for the Tk root
+h = 1000  # height for the Tk root
+
+root.geometry('%dx%d' % (w, h))
+# root.resizable(width=FALSE, height=FALSE)
+# root.attributes('-fullscreen',True)
+root.title('Cálculo de notas')
+color = 'slate gray'  # Outras opções de cor: SteelBlue4' #LightSkyBlue4' #dark green' #SteelBlue4 LightSkyBlue3
+root.configure(bg=color) #define a cor de fundo, conforme a variável "Color".
+
+# ====================================================Variáveis============================================================================
+
+turma = ''  # variável do combobox da turma
+lista_turma = []
+anoLetivo = ''  # variável do combo de ano letivo
+nome_da_prova = ''
+valor_da_prova = 0
+quantidade_de_questoes = 0
+contador_nome_aluno = 0
+
+valor_total = IntVar()
+
+dir = os.getcwd()
+
+diretorio_inserir = dir + '\\Ícones\\inserir_3_30x30_transparente.png' #caminho do botão "Inserir".
+icone_mais = PhotoImage(file=diretorio_inserir)
+
+diretorio_menos = dir + '\\Ícones\\excluir_3_30x30_transparente.png' #caminho do botão "Menos".
+icone_menos = PhotoImage(file=diretorio_menos)
+
+diretorio_editar = dir + '\\Ícones\\editar_3_30x30_transparente.png' #caminho do botão "Editar".
+icone_editar = PhotoImage(file=diretorio_editar)
+
+
+
+# ===================================================Dicionários e listas==========================================================================
+# Listas da prova:
+
+lista_base_questao = []
+lista_base_questao_ordenada = []
+lista_base_valor = []
+lista_base_acertos = []
+lista_base_valor_por_acerto = []
+
+# Listas do aluno:
+
+lista_base_questao_aluno = []
+nova_lista = [] #variável que serve para atualizar a lista de nomes dos alunos
+lista_nomes = [] #lista genérica de nomes
+
+# dicionários da prova:
+
+questao_valor = {}
+
+questao_acertos = {}
+
+questao_valorTotal = {}
+
+# Dicionários aluno:
+
+dic_questao_acertos_aluno = {}
+
+dic_questao_valor_total_aluno = {}
+
+aluno_nota = {}
+
+
+# ====================================================Funções gerais===========================================================================
+
+def msgErro(msg):
+    codigo_invalido = Tk()
+    codigo_invalido.title('Erro')
+    codigo_invalido.geometry('400x100+500+200')
+    codigo_invalido.resizable(width=False, height=False)
+    frame1 = Frame(codigo_invalido, height=15)
+    frame1.pack()
+    frame2 = Frame(codigo_invalido, height=70)
+    frame2.pack()
+    frame3 = Frame(codigo_invalido, height=15)
+    frame3.pack()
+    lb_codigo_invalido = Label(frame2, text=msg)
+    lb_codigo_invalido.pack(side=TOP)
+    bt_codigo_invalido = Button(frame2, text='Ok', width=10, borderwidth=3,
+                                command=lambda: kill_window(codigo_invalido))
+    bt_codigo_invalido.pack(side=TOP)
+    codigo_invalido.mainloop()
+
+
+def kill_window(x):
+    x.destroy()
+
+
+def press_tab(x):
+    abc = x
+    pyautogui.press('tab')
+    pass
+
+
+def click_adicionar_questao(x):
+    abc = x
+    pyautogui.click(x=730, y=338)
+
+
+# ====================================================Funções seção dos alunos=====================================================================
+
+def update_list(*args):
+    global nova_lista
+    global lista_nomes
+    search_term = search_var.get()
+    nova_lista = []
+
+
+
+    for item in lista_nomes:
+        if search_term.lower() in item.lower():
+            nova_lista.append(item)
+    nova_lista = sorted(nova_lista)
+    entry_nome_do_aluno['values'] = nova_lista
+
+
+def iniciar_correcao():
+    itens_da_lista_valor = lista_valor.get(0, END)
+    soma = 0.00
+    for i in itens_da_lista_valor:
+        soma = soma + float(i)
+    soma = round(soma, 1)
+    print(soma)
+    if soma != 10.0:
+        mensagem = '''O total da prova é diferente de dez!
+        Revise os valores da prova.'''
+        msgErro(mensagem)
+
+    else:
+        entry_nome_do_aluno.config(state='normal')
+        entry_nota_do_aluno.config(state='normal')
+        entry_inserir_questao.config(state='normal')
+        entry_inserir_acertos_automatico.config(state='normal')
+        entry_nota_valor_total.config(state='normal')
+
+        entry_inserir_questao.delete(0, END)
+        entry_inserir_questao.insert(0, lista_questoes.get(0))
+
+        btn_grava_nota_aluno.config(state='normal')
+        btn_consultar_notas.config(state='normal')
+
+        btn_secao_correcao.config(state='disable')
+
+        entry_valor_da_prova.config(state='disable')
+        entry_nome_da_prova.config(state='disable')
+        combo_turma.config(state='disable')
+        combo_ano_letivo.config(state='disable')
+        combo_divisao_periodo.config(state='disable')
+        combo_divisao_ano.config(state='disable')
+
+        btn_salva_prova.config(state='disable')
+        btn_adicionar_questao.config(state='disable')
+        btn_edita_questao.config(state='disable')
+        btn_deleta_questao.config(state='disable')
+
+        atualiza_lista_alunos('x')
+        salva_prova('x')
+        busca_notas()
+
+def edita_questao_aluno():
+    a = lista_questoes_aluno.curselection()
+    b = lista_acertos_aluno.curselection()
+    c = lista_total_questao_aluno.curselection()
+
+    if a != ():
+        linha = a
+    elif b != ():
+        linha = b
+    elif c != ():
+        linha = c
+
+    questao_editada = lista_questoes_aluno.get(linha)
+    entry_inserir_questao.delete(0, END)
+    entry_inserir_questao.insert(0, questao_editada)
+
+    deleta_questao_aluno()
+
+
+def deleta_questao_aluno():
+    a = lista_questoes_aluno.curselection()
+    b = lista_acertos_aluno.curselection()
+    c = lista_total_questao_aluno.curselection()
+
+    if a != ():
+        linha = a
+    elif b != ():
+        linha = b
+    elif c != ():
+        linha = c
+
+    try:
+        lista_base_questao_aluno.remove(lista_questoes_aluno.get(linha))
+        # lista_base_questao_aluno_ordenada.remove(lista_questoes_aluno.get(linha))
+
+        dic_questao_acertos_aluno.pop(lista_questoes_aluno.get(linha))
+        dic_questao_valor_total_aluno.pop(lista_questoes_aluno.get(linha))
+
+    except:
+        print('erro')
+
+    lista_questoes_aluno.delete(linha, last=None)
+    lista_acertos_aluno.delete(linha, last=None)
+    lista_total_questao_aluno.delete(linha, last=None)
+
+    # Atualizar o entry de nota final:
+    itens_da_lista_total_aluno = lista_total_questao_aluno.get(0, END)
+    soma_nota_final = 0.00
+    for i in itens_da_lista_total_aluno:
+        soma_nota_final = soma_nota_final + float(i)
+
+    # Habilito o campo de valor total, insiro o valor da soma total, depois desabilito ele novamente.
+
+    entry_nota_valor_total.delete(0, END)
+    entry_nota_valor_total.insert(0, soma_nota_final)
+
+    # Atualizo o entry da nota do aluno
+    nota_do_aluno_calculada = (soma_nota_final * float(entry_valor_da_prova.get())) / 10
+    entry_nota_do_aluno.delete(0, END)
+    entry_nota_do_aluno.insert(0, nota_do_aluno_calculada)
+
+
+def adiciona_questao_aluno(x):
+    aaa = x
+    bloqueado = 'sim'
+    # criando uma variável que contém toda a lista de questões:
+    lista_base_questao_aluno_vericacao = lista_questoes.get(0, END)
+
+    if entry_inserir_questao.get() == '':
+        msg = 'Informe a questão que deseja inserir!'
+        msgErro(msg)
+    if entry_inserir_questao.get() != '':
+        try:
+            teste_numero = float(entry_inserir_questao.get())
+        except:
+            msg = 'A questão deve ser um valor numérico!'
+            msgErro(msg)
+    if float(entry_inserir_questao.get()) in lista_base_questao_aluno:
+        msg = 'A questão ' + str(entry_inserir_questao.get()) + ' já foi inserida.'
+        msgErro(msg)
+    if float(entry_inserir_questao.get()) not in lista_base_questao_aluno_vericacao:
+        msg = '''A questão informada não está na lista
+              de questões da prova!'''
+        msgErro(msg)
+
+    try:
+        questao_a_inserir = int(entry_inserir_questao.get())
+    except:
+        questao_a_inserir = float(entry_inserir_questao.get())
+
+    # Atalhos do teclado:
+
+    acertos = entry_inserir_acertos_automatico.get().replace(',', '.')
+
+    if acertos == '*':
+        acertos = float(questao_acertos[questao_a_inserir])
+        entry_inserir_acertos_automatico.delete(0, END)
+        entry_inserir_acertos_automatico.insert(0, acertos)
+    if acertos == '/':
+        acertos = float(questao_acertos[questao_a_inserir]) / 2
+        entry_inserir_acertos_automatico.delete(0, END)
+        entry_inserir_acertos_automatico.insert(0, acertos)
+    if acertos == '-':
+        acertos = 0
+        entry_inserir_acertos_automatico.delete(0, END)
+        entry_inserir_acertos_automatico.insert(0, acertos)
+
+    if acertos == '':
+        msg = 'Informe a quantidade de acertos do aluno!'
+        msgErro(msg)
+    if acertos != '':
+        try:
+            teste_numero_virgula = entry_inserir_acertos_automatico.get()
+            teste_numero = float(teste_numero_virgula.replace(',', '.'))
+        except:
+            msg = 'A quantidade de acertos deve ser um valor numérico!'
+            msgErro(msg)
+    if float(acertos) > float(questao_acertos[questao_a_inserir]):
+        msg = '''A quantidade de acertos informada é maior
+         que a quantidade de acertos possíveis!'''
+        msgErro(msg)
+
+    if float(acertos) < 0:
+        msg = '''A quantidade de acertos informada deve ser
+         maior ou igual a zero!'''
+        msgErro(msg)
+
+    if float(acertos) <= float(questao_acertos[questao_a_inserir]) and float(acertos) >= 0:
+        bloqueado = 'Não'
+
+    # aqui eu calculo o valor total da questão informada:
+
+    acertos_a_inserir_virgula = entry_inserir_acertos_automatico.get().replace(',', '.')
+
+    try:
+        acertos_a_inserir = float(acertos_a_inserir_virgula.replace(',', '.'))
+    except:
+        acertos_a_inserir = float(acertos_a_inserir_virgula.replace(',', '.'))
+
+    valor_total_da_questao_a_inserir = round(
+        (float(questao_valor[questao_a_inserir]) / float(questao_acertos[questao_a_inserir])) * acertos_a_inserir, 2)
+
+    # aqui eu insiro os dados nos dicionários e lista de questões
+    # . Isso é necessário para eu poder chamar os valores depois:
+
+    if bloqueado == 'Não':
+
+        lista_base_questao_aluno.append(questao_a_inserir)
+        dic_questao_acertos_aluno[questao_a_inserir] = acertos_a_inserir
+        dic_questao_valor_total_aluno[questao_a_inserir] = valor_total_da_questao_a_inserir
+
+        # lista ordeneda de questões:
+        lista_base_questao_aluno_ordenada = sorted(lista_base_questao_aluno)
+
+        # Deletar o conteúdo dos listboxes, para serem refeitos de forma ordenada depois:
+        lista_questoes_aluno.delete(0, END)
+        lista_acertos_aluno.delete(0, END)
+        lista_total_questao_aluno.delete(0, END)
+
+        # aqui vou inserir os dados nos listboxes do aluno:
+        for i in lista_base_questao_aluno_ordenada:
+            lista_questoes_aluno.insert(END, i)
+            lista_acertos_aluno.insert(END, dic_questao_acertos_aluno[i])
+            lista_total_questao_aluno.insert(END, dic_questao_valor_total_aluno[i])
+
+        # Atualizar o entry de nota final:
+        itens_da_lista_total_aluno = lista_total_questao_aluno.get(0, END)
+        soma_nota_final = 0.00
+        for i in itens_da_lista_total_aluno:
+            soma_nota_final = soma_nota_final + float(i)
+
+        # Habilito o campo de valor total, insiro o valor da soma total, depois desabilito ele novamente.
+
+        entry_nota_valor_total.delete(0, END)
+        entry_nota_valor_total.insert(0, soma_nota_final)
+
+        # Atualizo o entry da nota do aluno
+        nota_do_aluno_calculada_virgula = entry_valor_da_prova.get()
+        nota_do_aluno_calculada_sem_virgula = nota_do_aluno_calculada_virgula.replace(',', '.')
+        nota_do_aluno_calculada = round((soma_nota_final * float(nota_do_aluno_calculada_sem_virgula)) / 10, 1)
+        entry_nota_do_aluno.delete(0, END)
+        entry_nota_do_aluno.insert(0, nota_do_aluno_calculada)
+
+        # Atualizo o entry de próxima questão e deleto  entry dos acertos:
+
+        n_de_questoes = len(lista_base_questao_aluno)
+        proxima_questao = lista_questoes.get(n_de_questoes)
+        entry_inserir_questao.delete(0, END)
+        entry_inserir_questao.insert(0, proxima_questao)
+
+        entry_inserir_acertos_automatico.delete(0, END)
+
+        # Atualizar o entry de nota final:
+        itens_da_lista_total_aluno = lista_total_questao_aluno.get(0, END)
+        soma_nota_final = 0.00
+        for i in itens_da_lista_total_aluno:
+            soma_nota_final = soma_nota_final + float(i)
+
+        # Habilito o campo de valor total, insiro o valor da soma total, depois desabilito ele novamente.
+        entry_nota_valor_total.delete(0, END)
+        entry_nota_valor_total.insert(0, soma_nota_final)
+
+
+def grava_nota_aluno(x):
+    abc = x
+    global dic_questao_acertos_aluno
+    global dic_questao_valor_total_aluno
+    global contador_nome_aluno
+    global lista_base_questao_aluno
+    global lista_nomes
+    # Vai servir para finalizar o cálculo da nota do aluno
+    # Grava nota do aluno e grava acertos
+    # Limpa os listboxes de acertos e valores do aluno
+    # Reseta o Label de próxima questão
+    # Retorna o cursor do mouse no campo de digitação de acertos
+
+    # Gravo a nota e o aluno no dicionário:
+    n_questoes = lista_questoes.get(0, END)
+    n_questoes_aluno = lista_questoes_aluno.get(0, END)
+    questoes_que_faltam = []
+    if len(n_questoes_aluno) == 0:
+        mensagem = 'Você ainda não inseriu questões!'
+        msgErro(mensagem)
+
+    elif len(n_questoes) != len(n_questoes_aluno):
+        for i in n_questoes:
+            if i not in n_questoes_aluno:
+                questoes_que_faltam.append(i)
+        mensagem = '''Para gravar a nota do aluno, você ainda 
+        precisa inserir as questões: ''' + str(questoes_que_faltam)
+        msgErro(mensagem)
+    else:
+        if entry_nome_do_aluno.get() == '':
+            contador_nome_aluno = contador_nome_aluno + 1
+            aluno = 'Aluno ' + str(contador_nome_aluno)
+            if aluno in list(aluno_nota.values()):
+                aluno = str(aluno) + ' (1)'
+        elif entry_nome_do_aluno.get() != '':
+            aluno = entry_nome_do_aluno.get()
+        nota = entry_nota_do_aluno.get()
+        aluno_nota[aluno] = nota
+
+        # gravar notas no excel:
+        prova_a_salvar = entry_nome_da_prova.get() + ' - ' + str(combo_turma.get()) + '.xlsx'
+        os.chdir(dir + '\\Pasta provas\\' + str(combo_ano_letivo.get()) + '\\' + str(
+            combo_divisao_periodo.get()))
+        try:
+            wb = openpyxl.load_workbook(prova_a_salvar)
+        except:
+            msg = '''Não foi encontrado o documento da prova.
+            Revise as configurações da prova, se elas de fato já foram salvas.'''
+            msgErro(msg)
+
+        sheet_notas = wb['notas_alunos']
+
+        sheet_notas.delete_rows(3, 250)  # limpo os registros de alunos que est~]ao salvos na planilha para depois popular a planilha novamente.
+
+        lista_consulta_alunos = list(aluno_nota.keys())
+        lista_consulta_alunos_ordenada = sorted(lista_consulta_alunos)
+        lista_consulta_notas = list(aluno_nota.values())
+        contador = 2
+        for i in lista_consulta_alunos_ordenada:
+            contador = contador + 1
+            c1 = str(get_column_letter(1)) + str(contador)
+            c2 = str(get_column_letter(2)) + str(contador)
+            sheet_notas[c1] = i
+            sheet_notas[c2] = aluno_nota[i]
+
+        wb.save(filename=prova_a_salvar)
+
+        #salvo o nome do aluno na sua devida pasta:
+        nome_aluno = entry_nome_do_aluno.get()
+        if nome_aluno not in lista_nomes:
+            lista_nomes.append(nome_aluno)
+        try:
+            wb_alunos = openpyxl.load_workbook(dir + '\\Lista_alunos\\' + str(combo_ano_letivo.get()) + '\\' + str(combo_turma.get()) + '.xlsx')
+            sheet_alunos = wb_alunos['alunos']
+            sheet_alunos.delete_rows(3, 250) #limpo os registros de alunos que est~]ao salvos na planilha para depois popular a planilha novamente.
+
+            contador = 2
+            for i in lista_nomes:
+                contador = contador + 1
+                c1 = str(get_column_letter(1)) + str(contador)
+                sheet_alunos[c1] = i
+            entry_nome_do_aluno['values'] = sorted(lista_nomes)
+            wb_alunos.save(dir + '\\Lista_alunos\\' + str(combo_ano_letivo.get()) + '\\' + str(combo_turma.get()) + '.xlsx')
+
+        except:
+            wb_alunos = openpyxl.load_workbook(dir + '\\Lista_alunos\\' + '\\' + 'Modelo_alunos.xlsx')
+            sheet_alunos = wb_alunos['alunos']
+            contador = 2
+            for i in lista_nomes:
+                contador = contador + 1
+                c1 = str(get_column_letter(1)) + str(contador)
+                sheet_alunos[c1] = i
+            wb_alunos.save(dir + '\\Lista_alunos\\' + str(combo_ano_letivo.get()) + '\\' + str(combo_turma.get()) + '.xlsx')
+            wb_alunos.close()
+            entry_nome_do_aluno['values'] = sorted(lista_nomes)
+
+
+        # Limpo os entrys de valor total e nome:
+        entry_nome_do_aluno.delete(0, END)
+        entry_nota_do_aluno.delete(0, END)
+        entry_nota_valor_total.delete(0, END)
+
+        # Limpo os dicionários:
+        dic_questao_acertos_aluno = {}
+        dic_questao_valor_total_aluno = {}
+
+        # Limpo os listboxes e listas:
+        lista_questoes_aluno.delete(0, END)
+        lista_acertos_aluno.delete(0, END)
+        lista_total_questao_aluno.delete(0, END)
+
+        lista_base_questao_aluno = []
+
+        # Volta para o campo nome do aluno:
+        pyautogui.hotkey('shift', 'tab')
+        pyautogui.hotkey('shift', 'tab')
+
+        entry_inserir_questao.insert(0, lista_questoes.get(0))
+
+
+def consulta_notas(x):
+    abc = x
+
+    def fechar_consulta_notas():
+        kill_window(janela_notas)
+
+    def edita_aluno():
+        a = list_alunos.curselection()
+        b = list_notas.curselection()
+
+        posicao = ()
+        segue = 'ok'
+        if a == ():
+            posicao = b
+        elif b == ():
+            posicao = a
+
+        if a == () and b == ():
+            msg = 'Selecione um aluno!'
+            msgErro(msg)
+            segue = 'erro'
+
+
+        if segue == 'ok':
+            aluno_a_editar = list_alunos.get(posicao)
+
+            entry_nome_do_aluno.delete(0, END)
+            entry_nome_do_aluno.insert(0, aluno_a_editar)
+
+            kill_window(janela_notas)
+
+    def deleta_aluno():
+        a = list_alunos.curselection()
+        b = list_notas.curselection()
+        posicao = ()
+        segue = 'ok'
+        if a == ():
+            posicao = b
+        elif b == ():
+            posicao = a
+
+        if a == () and b == ():
+            msg = 'Selecione um aluno!'
+            msgErro(msg)
+            segue = 'erro'
+
+        if segue == 'ok':
+            aluno_nota.pop(list_alunos.get(posicao))
+
+            list_alunos.delete(0, END)
+            list_notas.delete(0, END)
+
+            lista_consulta_alunos = list(aluno_nota.keys())
+            lista_consulta_alunos_ordenada = sorted(lista_consulta_alunos)
+            lista_consulta_notas = list(aluno_nota.values())
+
+            for i in lista_consulta_alunos_ordenada:
+                list_alunos.insert(END, i)
+                list_notas.insert(END, aluno_nota[i])
+
+    janela_notas = Tk()
+    janela_notas.title('Tabela de notas')
+    janela_notas.geometry('500x1000+50+0')
+    janela_notas.config(bg=color)
+
+    lb_alunos = Label(janela_notas, text='Alunos', width=18, font=('arial', 12, 'bold'))
+    lb_alunos.place(x=10, y=5)
+    lb_notas = Label(janela_notas, text='Notas', width=18, font=('arial', 12, 'bold'))
+    lb_notas.place(x=200, y=5)
+
+    list_alunos = Listbox(janela_notas, height=32, font=('arial', 12, 'bold'))
+    list_alunos.place(x=10, y=35)
+    list_notas = Listbox(janela_notas, height=32, font=('arial', 12, 'bold'))
+    list_notas.place(x=200, y=35)
+
+    btn_deleta_aluno = Button(janela_notas, text='Deletar', borderwidth=3, width=8, font=('arial', 12, 'bold'),
+                              command=deleta_aluno)  # image=icone_menos
+    btn_deleta_aluno.place(x=400, y=80)
+
+    btn_edita_aluno = Button(janela_notas, text='Editar', width=8, borderwidth=3, font=('arial', 12, 'bold'),
+                             command=edita_aluno)  # image=icone_editar
+    btn_edita_aluno.place(x=400, y=35)
+
+    btn_fechar_aluno = Button(janela_notas, text='Fechar', width=8, borderwidth=3, font=('arial', 12, 'bold'),
+                             command=fechar_consulta_notas)  # image=icone_editar
+    btn_fechar_aluno.place(x=400, y=125)
+
+
+
+    lista_consulta_alunos = list(aluno_nota.keys())
+    lista_consulta_alunos_ordenada = sorted(lista_consulta_alunos)
+    lista_consulta_notas = list(aluno_nota.values())
+
+    for i in lista_consulta_alunos_ordenada:
+        list_alunos.insert(END, i)
+        list_notas.insert(END, aluno_nota[i])
+
+    janela_notas.mainloop()
+
+
+def consulta_alunos():
+    global lista_nomes
+    global aluno_nota
+    def edita_aluno_lista():
+        global lista_nomes
+        def salvar_edicao_aluno():
+            global lista_nomes
+            del(lista_nomes[posicao_aluno__editar])
+            lista_nomes.append(entry_novo_nome_aluno.get())
+            kill_window(editar_aluno)
+            lista_nomes = sorted(lista_nomes)
+
+            list_alunos.delete(0, END)
+
+            for i in lista_nomes:
+                list_alunos.insert(END, i)
+            print(lista_nomes)
+            entry_nome_do_aluno['values'] = lista_nomes
+
+        a = list_alunos.curselection()
+        posicao = a
+        segue = 'ok'
+        if a != ():
+            segue = 'ok'
+
+        if a == ():
+            msg = 'Selecione um aluno!'
+            msgErro(msg)
+            segue = 'erro'
+
+        if segue == 'ok':
+            aluno_a_editar = list_alunos.get(posicao)
+            posicao_aluno__editar = lista_nomes.index(aluno_a_editar)
+
+            editar_aluno = Tk()
+            editar_aluno.geometry('500x50')
+            editar_aluno.config(bg=color)
+
+            entry_novo_nome_aluno = Entry(editar_aluno, width=30, font=('arial', 11, 'bold'))
+            entry_novo_nome_aluno.place(x= 3 , y = 10)
+
+            btn_salvar = Button(editar_aluno, text='Salvar',
+                                command=salvar_edicao_aluno)
+            btn_salvar.place(x = 280, y = 10)
+
+            btn_fechar = Button(editar_aluno, text='Fechar',
+                                command=lambda: kill_window(editar_aluno))
+            btn_fechar.place(x = 350, y = 10)
+
+            entry_novo_nome_aluno.mainloop()
+
+    def fechar_consulta_alunos():
+        global lista_nomes
+        entry_nome_do_aluno['values'] = lista_nomes
+        kill_window(janela_alunos)
+
+
+
+    def deleta_aluno_lista():
+        global lista_nomes
+        global aluno_nota
+        a = list_alunos.curselection()
+
+        posicao = a
+        segue = 'ok'
+        if a != ():
+            segue = 'ok'
+
+        if a == ():
+            msg = 'Selecione um aluno!'
+            msgErro(msg)
+            segue = 'erro'
+
+        if segue == 'ok':
+            aluno_a_editar = list_alunos.get(posicao)
+            posicao_aluno__editar = lista_nomes.index(aluno_a_editar)
+            lista_nomes.pop(posicao_aluno__editar)
+            aluno_nota.pop(aluno_a_editar)
+
+            list_alunos.delete(0, END)
+
+            for i in lista_nomes:
+                list_alunos.insert(END, i)
+        entry_nome_do_aluno['values'] = lista_nomes
+        print(lista_nomes)
+
+
+    janela_alunos = Tk()
+    janela_alunos.title('Lista de alunos')
+    janela_alunos.geometry('350x1000+50+0')
+    janela_alunos.config(bg=color)
+
+    lb_alunos = Label(janela_alunos, text='Alunos', width=18, font=('arial', 12, 'bold'))
+    lb_alunos.place(x=10, y=5)
+
+    list_alunos = Listbox(janela_alunos, height=32, font=('arial', 12, 'bold'))
+    list_alunos.place(x=10, y=35)
+
+    btn_deleta_aluno = Button(janela_alunos, text='Deletar', borderwidth=3, width=8, font=('arial', 12, 'bold'),
+                              command=deleta_aluno_lista)  # image=icone_menos
+    btn_deleta_aluno.place(x=220, y=80)
+
+    btn_edita_aluno = Button(janela_alunos, text='Editar', width=8, borderwidth=3, font=('arial', 12, 'bold'),
+                             command=edita_aluno_lista)  # image=icone_editar
+    btn_edita_aluno.place(x=220, y=35)
+
+    btn_fechar_consulta_aluno = Button(janela_alunos, text='Fechar', width=8, borderwidth=3, font=('arial', 12, 'bold'),
+                             command=fechar_consulta_alunos)  # image=icone_editar
+    btn_fechar_consulta_aluno.place(x=220, y=125)
+
+    lista_nomes = sorted(lista_nomes)
+
+    for i in lista_nomes:
+        list_alunos.insert(END, i)
+
+
+
+    janela_alunos.mainloop()
+
+
+def instrucoes_questao_aluno():
+    instrucao_inserir_questao = Tk()
+    instrucao_inserir_questao.title('Instruções')
+    instrucao_inserir_questao.geometry('600x180+500+200')
+    instrucao_inserir_questao.resizable(width=False, height=False)
+    frame1 = Frame(instrucao_inserir_questao, height=15)
+    frame1.pack()
+    frame2 = Frame(instrucao_inserir_questao, height=70)
+    frame2.pack()
+    frame3 = Frame(instrucao_inserir_questao, height=15)
+    frame3.pack()
+    msg = '''Informe a quantidade de acertos do aluno e aperte ENTER. Dessa forma, a questão será inserida.
+     Atalhos:
+     -> Se o aluno acertou metade da questão, você pode informar "/". 
+     -> Se o aluno acertou toda a questão, você pode informar "*".
+     -> Se o aluno errou toda a questão, você pode informar "-".'''
+    lb_codigo_invalido = Label(frame2, text=msg)
+    lb_codigo_invalido.pack(side=TOP)
+    bt_codigo_invalido = Button(frame2, text='Ok', width=10, borderwidth=3,
+                                command=lambda: kill_window(instrucao_inserir_questao))
+    bt_codigo_invalido.pack(side=TOP)
+    instrucao_inserir_questao.mainloop()
+
+
+# ===============================================Funções seção das provas==========================================================================
+
+def atualiza_lista_divisao_periodo(x):
+    abc = x
+    global divisao_periodo
+    divisao_periodo
+    if combo_divisao_ano.get() == 'Semestre':
+        divisao_periodo = ['1º', '2º']
+    elif combo_divisao_ano.get() == 'Trimestre':
+        divisao_periodo = ['1º', '2º', '3º']
+    elif combo_divisao_ano.get() == 'Bimestre':
+        divisao_periodo = ['1º', '2º', '3º', '4º']
+
+def busca_notas():#crio essa fnução para atualizar o dicionário de notas dos alunos, caso o usuário troque de turma
+    # Busco os dados de notas dos alunos:
+    nomeProva = str(entry_nome_da_prova) + ' - ' + str(entry_valor_da_prova) + '.xlsx'
+    wb = openpyxl.load_workbook(dir + '\\Pasta provas\\' + str(combo_ano_letivo.get()) + '\\' + str(combo_divisao_periodo.get()) + '\\' + nomeProva)
+    sheet2 = wb['notas_alunos']
+    alunos_nome_dados = []
+    for i in range(3, 100):
+        a = sheet2.cell(row=i, column=1).value
+        if a != None:
+            alunos_nome_dados.append(a)
+
+    alunos_nota_dados = []
+    for i in range(3, 100):
+        a = sheet2.cell(row=i, column=2).value
+        if a != None:
+            alunos_nota_dados.append(a)
+    contador = -1
+    for i in alunos_nome_dados:
+        contador = contador + 1
+        aluno_nota[i] = alunos_nota_dados[contador]
+
+def atualiza_lista_alunos(x):
+    abc = x
+    global lista_nomes
+    try:
+        lista_nomes = []
+        wb_alunos = openpyxl.load_workbook(dir + '\\Lista_alunos\\' + str(combo_ano_letivo.get()) + '\\' + str(combo_turma.get()) + '.xlsx')
+        sheet_alunos = wb_alunos['alunos']
+        for i in range(3, 250):
+            a = sheet_alunos.cell(row=i, column=1).value
+            if a != None:
+                lista_nomes.append(a)
+        lista_nomes = sorted(lista_nomes)
+        entry_nome_do_aluno['values'] = lista_nomes
+    except:
+        wb_alunos = openpyxl.load_workbook(dir + '\\Lista_alunos\\' + '\\' + 'Modelo_alunos.xlsx')
+        wb_alunos.save(dir + '\\Lista_alunos\\' + str(combo_ano_letivo.get()) + '\\' + str(combo_turma.get()) + '.xlsx')
+        wb_alunos.close()
+        lista_nomes = []
+        entry_nome_do_aluno['values'] = sorted(lista_nomes)
+
+def atualiza_turmas(x):
+    abc = x
+    wb = openpyxl.load_workbook(dir + '\\Dados_base\\Turmas.xlsx')
+    lista_turma = []
+    if combo_ano_letivo.get() != '':
+        sheet_turma = wb[combo_ano_letivo.get()]
+        contador = 0
+        lista_de_turmas_excel = []
+
+        for i in range(0, 60):
+            contador = contador + 1
+            c = str(get_column_letter(1)) + str(contador)
+            lista_de_turmas_excel.append(sheet_turma[c].value)
+        for i in lista_de_turmas_excel:
+            if i != None:
+                lista_turma.append(i)
+    combo_turma['values'] = lista_turma
+
+def lista_provas():
+    # crio uma nova janela, na qual vou listar as provas:
+    teste_erro = ''
+    try:
+        ano = int(combo_ano_letivo.get())
+        teste_erro = 'ok'
+    except:
+
+        teste_erro = 'erro'
+    if teste_erro == 'erro':
+        msg = 'Informe um período válido!'
+        msgErro(msg)
+
+    elif int(combo_ano_letivo.get()) not in lista_ano_letivo:
+        msg = 'Informe um período válido!'
+        msgErro(msg)
+    else:
+        janela_provas = Tk()
+        janela_provas.title('Lista de provas')
+        janela_provas.config(bg=color)
+        janela_provas.geometry('620x600+300+100')
+        # Labels:
+        lb_provas = Label(janela_provas, text='Provas', width=25)
+        lb_provas.place(x=10, y=10)
+        lb_datas = Label(janela_provas, text='Última modificação', width=25)
+        lb_datas.place(x=210, y=10)
+        # Listboxes:
+        list_provas = Listbox(janela_provas, height=25,
+                              font=(12))
+        list_provas.place(x=10, y=40)
+
+        list_datas = Listbox(janela_provas, height=25,
+                             font=(12))
+        list_datas.place(x=210, y=40)
+        # Dicionário que vou utilizar para gravar os dados das provas:
+        dic_provas = {}
+        # Lista que possui todos os arquivos das provas:
+        lista_de_provas = os.listdir(
+            dir + '\\Pasta provas\\' + str(combo_ano_letivo.get()) + '\\' + str(
+                combo_divisao_periodo.get()))
+        for i in lista_de_provas:
+            modTimesinceEpoc = os.path.getmtime(dir + '\\Pasta provas\\' + str(
+                combo_ano_letivo.get()) + '\\' + str(
+                combo_divisao_periodo.get()) + '\\' + i)  # busca a informação da data da áultima modificação
+            modificationTime = time.strftime('%d-%m-%Y %H:%M:%S', time.localtime(
+                modTimesinceEpoc))  # transforma a informação da data em formato de data
+            dic_provas[
+                i] = modificationTime  # insere informações no dicioário: o nome da prova aponta para a data de sua última modificação.
+
+        ordered_data = sorted(dic_provas.items(), key=lambda x: datetime.strptime(x[1], '%d-%m-%Y %H:%M:%S'),
+                              reverse=True)
+        lista_provas_ordenada = []
+        lista_datas_ordenada = []
+        for i in ordered_data:
+            lista_provas_ordenada.append(i[0])
+            lista_datas_ordenada.append(i[1])
+
+        for i in lista_provas_ordenada:
+            list_provas.insert(END, i)
+        for i in lista_datas_ordenada:
+            list_datas.insert(END, i)
+
+        btn_prova = Button(janela_provas, text='Carregar selecionada', width=17, font=('arial', 12, 'bold'),
+                           command=lambda: busca_prova(list_provas, janela_provas))
+        btn_prova.place(x=420, y=39)
+
+        btn_deleta_prova = Button(janela_provas, text='Deletar selecionada', width=17, font=('arial', 12, 'bold'),
+                                  command=lambda: tem_certeza_deletar(list_provas, list_datas))
+        btn_deleta_prova.place(x=420, y=80)
+
+        btn_fechar = Button(janela_provas, text='Fechar', width=17, font=('arial', 12, 'bold'),
+                            command=lambda: kill_window(janela_provas))
+        btn_fechar.place(x=420, y=120)
+
+        atualiza_lista_de_provas(list_provas, list_datas)
+
+        janela_provas.mainloop()
+
+
+def atualiza_lista_de_provas(x, y):
+    x.delete(0, END)
+    y.delete(0, END)
+
+    dic_provas = {}
+    # Lista que possui todos os arquivos das provas:
+    lista_de_provas = os.listdir(dir + '\\Pasta provas\\' + str(combo_ano_letivo.get()) + '\\' + str(
+        combo_divisao_periodo.get()))
+    for i in lista_de_provas:
+        modTimesinceEpoc = os.path.getmtime(dir + '\\Pasta provas\\' + str(
+            combo_ano_letivo.get()) + '\\' + str(
+            combo_divisao_periodo.get()) + '\\' + i)  # busca a informação da data da áultima modificação
+        modificationTime = time.strftime('%d-%m-%Y %H:%M:%S', time.localtime(
+            modTimesinceEpoc))  # transforma a informação da data em formato de data
+        dic_provas[
+            i] = modificationTime  # insere informações no dicioário: o nome da prova aponta para a data de sua última modificação.
+
+    ordered_data = sorted(dic_provas.items(), key=lambda x: datetime.strptime(x[1], '%d-%m-%Y %H:%M:%S'), reverse=True)
+    lista_provas_ordenada = []
+    lista_datas_ordenada = []
+    for i in ordered_data:
+        lista_provas_ordenada.append(i[0])
+        lista_datas_ordenada.append(i[1])
+
+    for i in lista_provas_ordenada:
+        x.insert(END, i)
+    for i in lista_datas_ordenada:
+        y.insert(END, i)
+
+
+def tem_certeza_deletar(x, y):
+    msg = 'Tem certeza que deseja deletar a prova selecionada?'
+    codigo_invalido = Tk()
+    codigo_invalido.title('Atenção')
+    codigo_invalido.geometry('400x100+500+200')
+    codigo_invalido.resizable(width=False, height=False)
+    frame1 = Frame(codigo_invalido, height=15)
+    frame1.pack()
+    frame2 = Frame(codigo_invalido, height=70)
+    frame2.pack()
+    frame3 = Frame(codigo_invalido, height=15)
+    frame3.pack()
+    lb_codigo_invalido = Label(frame2, text=msg)
+    lb_codigo_invalido.pack(side=TOP)
+    bt_sim = Button(frame2, text='Sim', width=10, borderwidth=3,
+                    command=lambda: deleta_prova(x, y, codigo_invalido))
+    bt_sim.pack(side=TOP)
+
+    bt_nao = Button(frame2, text='Não', width=10, borderwidth=3,
+                    command=lambda: kill_window(codigo_invalido))
+    bt_nao.pack(side=TOP)
+    codigo_invalido.mainloop()
+
+
+def deleta_prova(x, y, z):
+    # Busca tabela do excel da lista de provas:
+    try:
+        linha = x.curselection()
+        nomeProva = x.get(linha)
+    except:
+        mensagem = 'Selecione uma prova da lista de provas!'
+        msgErro(mensagem)
+
+    os.remove(dir + '\\Pasta provas\\' + str(combo_ano_letivo.get()) + '\\' + str(
+        combo_divisao_periodo.get()) + '\\' + nomeProva)
+
+    kill_window(z)
+
+    atualiza_lista_de_provas(x, y)
+
+
+def busca_prova(x, y):
+    global lista_nomes
+    # Busca tabela do excel da lista de provas:
+    try:
+        linha = x.curselection()
+        nomeProva = x.get(linha)
+    except:
+        mensagem = 'Selecione uma prova da lista de provas!'
+        msgErro(mensagem)
+
+    wb = openpyxl.load_workbook(dir + '\\Pasta provas\\' + str(combo_ano_letivo.get()) + '\\' + str(
+        combo_divisao_periodo.get()) + '\\' + nomeProva)
+    sheet1 = wb['dados_prova']
+
+    # Busco os dados da prova no excel:
+    questoes_dados = []
+    for i in range(6, 50):
+        a = sheet1.cell(row=i, column=1).value
+        if a != None:
+            if '.' not in str(a):
+                a = int(a)
+            else:
+                a = float(a)
+            questoes_dados.append(a)
+
+    valor_dados = []
+    for i in range(6, 50):
+        a = sheet1.cell(row=i, column=2).value
+        if a != None:
+            try:
+                a = float(a)
+            except:
+                a = int(a)
+            valor_dados.append(a)
+
+    acertos_dados = []
+    for i in range(6, 50):
+        a = sheet1.cell(row=i, column=3).value
+        if a != None:
+            try:
+                a = int(a)
+            except:
+                a = float(a)
+            acertos_dados.append(a)
+
+    valor_por_qt_de_acertos_dados = []
+    for i in range(6, 50):
+        a = sheet1.cell(row=i, column=4).value
+        if a != None:
+            try:
+                a = float(a)
+            except:
+                a = int(a)
+            valor_por_qt_de_acertos_dados.append(a)
+
+    # Limpo qualquer dado que exista nos listboxes de questões e dicionários:
+    lista_questoes.delete(0, END)
+    lista_valor.delete(0, END)
+    lista_acertos.delete(0, END)
+    lista_valor_por_acerto.delete(0, END)
+
+    # Carrego os dados das lista do excel nos listboxes da prova:
+    for i in questoes_dados:
+        lista_questoes.insert(END, i)
+    for i in valor_dados:
+        lista_valor.insert(END, i)
+    for i in acertos_dados:
+        lista_acertos.insert(END, i)
+    for i in valor_por_qt_de_acertos_dados:
+        lista_valor_por_acerto.insert(END, i)
+
+    # Carrego a variáveis que uso na função adiciona_questão, para que a lista seja refeita corretamente ao adicionar novas questões:
+    for i in questoes_dados:
+        lista_base_questao.append(i)
+
+    for i in valor_dados:
+        if i != '':
+            lista_base_valor.append(i)
+
+    for i in acertos_dados:
+        if i != '':
+            lista_base_acertos.append(i)
+
+    for i in valor_por_qt_de_acertos_dados:
+        if i != '':
+            lista_base_valor_por_acerto.append(i)
+
+    contador = 0
+    for i in lista_base_questao:
+        contador = contador + 1
+        n = contador - 1
+        questao_valor[i] = float(lista_base_valor[n])
+        questao_acertos[i] = int(lista_base_acertos[n])
+        questao_valorTotal[i] = float(lista_base_valor_por_acerto[n])
+
+    # Desabilito o botão de carregar prova. Motivo disso é que ficaria ruim carregar os dados de uma nova prova em cima da prova antiga.
+    # Dessa forma, eu obrigo o usuário a fechar o programa e abrir novamente, caso ele queira carregar novas provas.
+    btn_busca_prova.config(state='disable')
+
+    # Repasso todos os valores do listbox de valor das questões para uma lista. dessa forma eu consigo fazer um loop para gerar a soma total
+    itens_da_lista_valor = lista_valor.get(0, END)
+    soma = 0.00
+    for i in itens_da_lista_valor:
+        soma = soma + float(i)
+    soma = round(soma, 1)
+    print(soma)
+    # Habilito o campo de valor total, insiro o valor da soma total, depois desabilito ele novamente.
+    entry_valor_total.config(state='normal')
+    entry_valor_total.delete(0, END)
+    entry_valor_total.insert(0, soma)
+    entry_valor_total.config(state='disable')
+
+    # Limpo o campo de nome da prova e valor e insiro novamente os dados, buscados lá na planilha excel:
+    entry_nome_da_prova.delete(0, END)
+    entry_valor_da_prova.delete(0, END)
+    entry_nome_da_prova.insert(0, sheet1.cell(row=1, column=2).value)
+    entry_valor_da_prova.insert(0, sheet1.cell(row=2, column=2).value)
+    turma = sheet1['D1'].value
+    if turma != None:
+        combo_turma.set(str(turma))
+
+    # Tento buscar a lista de nomes dos alunos e carrego na lista de nomes:
+    try:
+        wb_alunos = openpyxl.load_workbook(dir + '\\Lista_alunos\\' + str(combo_ano_letivo.get()) + '\\' + str(turma) + '.xlsx')
+        sheet_alunos = wb_alunos['alunos']
+        for i in range(3, 250):
+            a = sheet_alunos.cell(row=i, column=1).value
+            if a != None:
+                lista_nomes.append(a)
+        lista_nomes = sorted(lista_nomes)
+        entry_nome_do_aluno['values'] = sorted(lista_nomes)
+    except:
+        pass
+
+    # Busco os dados de notas dos alunos:
+    sheet2 = wb['notas_alunos']
+    alunos_nome_dados = []
+    for i in range(3, 100):
+        a = sheet2.cell(row=i, column=1).value
+        if a != None:
+            alunos_nome_dados.append(a)
+
+    alunos_nota_dados = []
+    for i in range(3, 100):
+        a = sheet2.cell(row=i, column=2).value
+        if a != None:
+            alunos_nota_dados.append(a)
+    contador = -1
+    for i in alunos_nome_dados:
+        contador = contador + 1
+        aluno_nota[i] = alunos_nota_dados[contador]
+
+    kill_window(y)
+
+
+def salva_prova(x):
+    global aluno_nota
+    x = 'abc'
+
+    def salvar_dados_da_prova():
+        kill_window(codigo_invalido)
+
+        # Salvo o ano letivo atual
+        wb = openpyxl.load_workbook(dir + '\\Dados_base\\planilha_modelo_de_dados.xlsx')
+        os.chdir(dir + '\\Dados_base\\')
+        sheet_ano_letivo = wb['ano_letivo_atual']
+        sheet_ano_letivo['A1'] = combo_ano_letivo.get()
+        sheet_ano_letivo['B1'] = combo_divisao_ano.get()
+        sheet_ano_letivo['C1'] = combo_divisao_periodo.get()
+
+        wb.save(filename='planilha_modelo_de_dados.xlsx')
+
+        # crio uma planilha com o ano letivo, ou populo novamente a planilha com os dados das turmas:
+
+        wb = openpyxl.load_workbook(dir + '\\Dados_base\\Turmas.xlsx')
+        os.chdir(dir + '\\Dados_base\\')
+
+        sheet_turma = wb[combo_ano_letivo.get()]
+        if combo_turma.get() not in lista_turma:
+            lista_turma.append(combo_turma.get())
+        contador = 0
+        for i in lista_turma:
+            contador = contador + 1
+            c = str(get_column_letter(1)) + str(contador)
+            sheet_turma[c] = i
+
+        wb.save(filename='Turmas.xlsx')
+
+        # inserir valores da prova:
+        wb = openpyxl.load_workbook(dir + '\\Dados_base\\planilha_modelo_de_dados.xlsx')
+
+        os.chdir(dir + '\\Pasta provas\\' + str(combo_ano_letivo.get()) + '\\' + str(
+            combo_divisao_periodo.get()))
+
+        # notas dos alunos:
+        sheet_notas = wb['notas_alunos']
+
+        lista_consulta_alunos = list(aluno_nota.keys())
+        lista_consulta_alunos_ordenada = sorted(lista_consulta_alunos)
+        lista_consulta_notas = list(aluno_nota.values())
+        contador = 2
+        for i in lista_consulta_alunos_ordenada:
+            contador = contador + 1
+            c1 = str(get_column_letter(1)) + str(contador)
+            c2 = str(get_column_letter(2)) + str(contador)
+            sheet_notas[c1] = i
+            sheet_notas[c2] = aluno_nota[i]
+
+        sheet1 = wb['dados_prova']
+        contador = 0
+        lista_questoes_salvar = lista_questoes.get(0, END)
+        lista_valor_salvar = lista_valor.get(0, END)
+        lista_acertos_salvar = lista_acertos.get(0, END)
+        lista_valor_por_acerto_salvar = lista_valor_por_acerto.get(0, END)
+
+        for i in lista_questoes_salvar:
+            contador = contador + 1
+            numero = contador + 5
+            c = str(get_column_letter(1)) + str(numero)
+            sheet1[c] = i
+        contador = 0
+
+        for i in lista_valor_salvar:
+            contador = contador + 1
+            numero = contador + 5
+            c = str(get_column_letter(2)) + str(numero)
+            sheet1[c] = i
+        contador = 0
+
+        for i in lista_acertos_salvar:
+            contador = contador + 1
+            numero = contador + 5
+            c = str(get_column_letter(3)) + str(numero)
+            sheet1[c] = i
+        contador = 0
+
+        for i in lista_valor_por_acerto_salvar:
+            contador = contador + 1
+            numero = contador + 5
+            c = str(get_column_letter(4)) + str(numero)
+            sheet1[c] = i
+
+        # Inserir nome da prova e valor:
+        sheet1['B1'] = nome_da_prova_salvar
+        sheet1['B2'] = valor_da_prova_salvar
+        sheet1['D1'] = str(combo_turma.get())
+
+        # Desabilito o botão de carregar prova. Motivo disso é que ficaria ruim carregar os dados de uma nova prova em cima da prova antiga.
+        # Dessa forma, eu obrigo o usuário a fechar o programa e abrir novamente, caso ele queira carregar novas provas.
+        btn_busca_prova.config(state='disable')
+
+        wb.save(filename=nome_da_prova_salvar + ' - ' + str(combo_turma.get()) + '.xlsx')
+
+    if int(combo_ano_letivo.get()) not in lista_ano_letivo:
+        msg = 'Selecione um ano letivo!'
+        msgErro(msg)
+
+    elif combo_divisao_ano.get() not in divisao_ano:
+        msg = 'Informe uma divisão para o ano letivo!'
+        msgErro(msg)
+
+    elif combo_divisao_periodo.get() not in divisao_periodo:
+        msg = 'Informe em qual ' + str(combo_divisao_ano.get()) + ' você está!'
+        msgErro(msg)
+
+    elif entry_nome_da_prova.get() == '':
+        mensagem = 'Preencha o campo "Nome da prova".'
+        msgErro(mensagem)
+
+    elif entry_valor_da_prova.get() == '':
+        mensagem = 'Preencha o campo "Valor da prova".'
+        msgErro(mensagem)
+
+    elif entry_valor_da_prova.get() != '':
+        verificacao_ok = 'ok'
+        try:
+            teste_valor_da_prova_virgula = entry_valor_da_prova.get()
+            teste_valor_da_prova = float(teste_valor_da_prova_virgula.replace(',', '.'))
+            if teste_valor_da_prova < 0.1:
+                mensagem = 'O valor da prova deve ser maior que zero'
+                msgErro(mensagem)
+                verificacao_ok = 'Erro'
+        except:
+            mensagem = 'O valor da prova deve ser numérico!'
+            msgErro(mensagem)
+            verificacao_ok = 'Erro'
+
+    if verificacao_ok == 'ok':
+
+        # Salvo o ano letivo atual
+        wb = openpyxl.load_workbook(dir + '\\Dados_base\\planilha_modelo_de_dados.xlsx')
+        os.chdir(dir + '\\Dados_base\\')
+        sheet_ano_letivo = wb['ano_letivo_atual']
+        sheet_ano_letivo['A1'] = combo_ano_letivo.get()
+        sheet_ano_letivo['B1'] = combo_divisao_ano.get()
+        sheet_ano_letivo['C1'] = combo_divisao_periodo.get()
+        wb.save(filename='planilha_modelo_de_dados.xlsx')
+
+        # crio uma planilha com o ano letivo, ou populo novamente a planilha com os dados das turmas:
+
+        wb = openpyxl.load_workbook(dir + '\\Dados_base\\Turmas.xlsx')
+        os.chdir(dir + '\\Dados_base\\')
+
+        sheet_turma = wb[combo_ano_letivo.get()]
+        if combo_turma.get() not in lista_turma:
+            lista_turma.append(combo_turma.get())
+        contador = 0
+        for i in lista_turma:
+            contador = contador + 1
+            c = str(get_column_letter(1)) + str(contador)
+            sheet_turma[c] = i
+
+        wb.save(filename='Turmas.xlsx')
+
+        # Salvo os dados da prova:
+
+        nome_da_prova_salvar = entry_nome_da_prova.get()
+        valor_da_prova_salvar = entry_valor_da_prova.get()
+
+        os.chdir(dir + '\\Pasta provas\\' + str(combo_ano_letivo.get()) + '\\' + str(
+            combo_divisao_periodo.get()))
+
+        lista_de_provas = os.listdir(
+            dir + '\\Pasta provas\\' + str(combo_ano_letivo.get()) + '\\' + str(
+                combo_divisao_periodo.get()))
+        prova_a_salvar = nome_da_prova_salvar + ' - ' + str(combo_turma.get()) + '.xlsx'
+        if prova_a_salvar in lista_de_provas:
+            msg = '''Já existe uma prova salva com o nome ''' + str(prova_a_salvar) + '''.
+             Tem certeza que deseja continuar?'''
+            codigo_invalido = Tk()
+            codigo_invalido.title('Atenção')
+            codigo_invalido.geometry('400x200+500+200')
+            codigo_invalido.resizable(width=False, height=False)
+            frame1 = Frame(codigo_invalido, height=15)
+            frame1.pack()
+            frame2 = Frame(codigo_invalido, height=70)
+            frame2.pack()
+            frame3 = Frame(codigo_invalido, height=15)
+            frame3.pack()
+            lb_codigo_invalido = Label(frame2, text=msg)
+            lb_codigo_invalido.pack(side=TOP)
+            bt_continuar = Button(frame2, text='Continuar', width=10, borderwidth=3,
+                                  command=lambda: salvar_dados_da_prova())
+            bt_continuar.pack(side=TOP)
+            bt_codigo_invalido = Button(frame2, text='Cancelar', width=10, borderwidth=3,
+                                        command=lambda: kill_window(codigo_invalido))
+            bt_codigo_invalido.pack(side=TOP)
+            codigo_invalido.mainloop()
+
+        else:
+
+            msg = 'Salvando dados...'
+            codigo_invalido = Tk()
+            codigo_invalido.title('Salvando dados')
+            codigo_invalido.geometry('400x100+500+200')
+            codigo_invalido.resizable(width=False, height=False)
+            frame1 = Frame(codigo_invalido, height=15)
+            frame1.pack()
+            frame2 = Frame(codigo_invalido, height=70)
+            frame2.pack()
+            frame3 = Frame(codigo_invalido, height=15)
+            frame3.pack()
+            lb_codigo_invalido = Label(frame2, text=msg)
+            lb_codigo_invalido.pack(side=TOP)
+            bt_codigo_invalido = Button(frame2, text='Ok', width=10, borderwidth=3,
+                                        command=lambda: kill_window(codigo_invalido))
+            bt_codigo_invalido.pack(side=TOP)
+
+            # inserir valores da prova:
+
+            wb = openpyxl.load_workbook(dir + '\\Dados_base\\planilha_modelo_de_dados.xlsx')
+
+            sheet_notas = wb['notas_alunos']
+
+            aluno_nota = {}
+
+            lista_consulta_alunos = list(aluno_nota.keys())
+            lista_consulta_alunos_ordenada = sorted(lista_consulta_alunos)
+            lista_consulta_notas = list(aluno_nota.values())
+            contador = 2
+            for i in lista_consulta_alunos_ordenada:
+                contador = contador + 1
+                c1 = str(get_column_letter(1)) + str(contador)
+                c2 = str(get_column_letter(2)) + str(contador)
+                sheet_notas[c1] = i
+                sheet_notas[c2] = aluno_nota[i]
+
+            sheet1 = wb['dados_prova']
+            contador = 0
+            lista_questoes_salvar = lista_questoes.get(0, END)
+            lista_valor_salvar = lista_valor.get(0, END)
+            lista_acertos_salvar = lista_acertos.get(0, END)
+            lista_valor_por_acerto_salvar = lista_valor_por_acerto.get(0, END)
+
+            for i in lista_questoes_salvar:
+                contador = contador + 1
+                numero = contador + 5
+                c = str(get_column_letter(1)) + str(numero)
+                sheet1[c] = i
+            contador = 0
+
+            for i in lista_valor_salvar:
+                contador = contador + 1
+                numero = contador + 5
+                c = str(get_column_letter(2)) + str(numero)
+                sheet1[c] = i
+            contador = 0
+
+            for i in lista_acertos_salvar:
+                contador = contador + 1
+                numero = contador + 5
+                c = str(get_column_letter(3)) + str(numero)
+                sheet1[c] = i
+            contador = 0
+
+            for i in lista_valor_por_acerto_salvar:
+                contador = contador + 1
+                numero = contador + 5
+                c = str(get_column_letter(4)) + str(numero)
+                sheet1[c] = i
+
+            # Inserir nome da prova e valor:
+            sheet1['B1'] = nome_da_prova_salvar
+            sheet1['B2'] = valor_da_prova_salvar
+            sheet1['D1'] = str(combo_turma.get())
+
+            wb.save(filename=nome_da_prova_salvar + ' - ' + str(combo_turma.get()) + '.xlsx')
+
+            # Desabilito o botão de carregar prova. Motivo disso é que ficaria ruim carregar os dados de uma nova prova em cima da prova antiga.
+            # Dessa forma, eu obrigo o usuário a fechar o programa e abrir novamente, caso ele queira carregar novas provas.
+            btn_busca_prova.config(state='disable')
+
+            time.sleep(0.5)
+            lb_codigo_invalido['text'] = 'Dados salvos!'
+            codigo_invalido.mainloop()
+
+
+def edita_questao():
+    # localiza a linha que foi editada
+    # abre janela de edição com os valores de código e quantidade da linha editada
+    # salva sobre a linha que foi editada com os novos dados inseridos
+    a = lista_questoes.curselection()
+    b = lista_valor.curselection()
+    c = lista_acertos.curselection()
+    d = lista_valor_por_acerto.curselection()
+    # Estas linha abaixo servem para gravar a posição da linha selecionada na variável linha.
+    if a != ():
+        linha = a
+    elif b != ():
+        linha = b
+    elif c != ():
+        linha = c
+    elif d != ():
+        linha = d
+
+    descricao_da_questao = lista_questoes.get(linha)  # para definir o título da página de edição do item.
+
+    nova_questao = Tk()
+    nova_questao.title('Editar questão ' + str(descricao_da_questao))
+    nova_questao.geometry('350x150+500+200')
+    nova_questao.resizable(width=FALSE, height=FALSE)
+
+    lb_questao_nova_questao = Label(nova_questao, text='Questão:', width=20, justify=LEFT, anchor=E)
+    lb_questao_nova_questao.place(x=0, y=0)
+
+    entry_nova_questao = Entry(nova_questao, width=20)
+    entry_nova_questao.place(x=150, y=0)
+    entry_nova_questao.insert(0, lista_questoes.get(linha))
+    entry_nova_questao.bind('<Return>', press_tab)
+
+    lb_valor_nova_questao = Label(nova_questao, text='Valor:', width=20, justify=LEFT, anchor=E)
+    lb_valor_nova_questao.place(x=0, y=30)
+
+    entry_valor_nova_questao = Entry(nova_questao, width=20)
+    entry_valor_nova_questao.place(x=150, y=30)
+    entry_valor_nova_questao.insert(0, lista_valor.get(linha))
+    entry_valor_nova_questao.bind('<Return>', press_tab)
+
+    lb_acertos_nova_questao = Label(nova_questao, text='Quantidade de acertos:', width=20, justify=LEFT, anchor=E)
+    lb_acertos_nova_questao.place(x=0, y=60)
+
+    entry_acertos_nova_questao = Entry(nova_questao, width=20)
+    entry_acertos_nova_questao.place(x=150, y=60)
+    entry_acertos_nova_questao.insert(0, lista_acertos.get(linha))
+    entry_acertos_nova_questao.bind('<Return>', press_tab)
+
+    btn_salva_questao = Button(nova_questao, text='Adicionar questão', borderwidth=3,
+                               command=lambda: adiciona_questao(entry_nova_questao, entry_valor_nova_questao,
+                                                                entry_acertos_nova_questao, nova_questao))
+    btn_salva_questao.place(x=150, y=90)
+
+    deleta_questao()
+
+    nova_questao.mainloop()
+
+
+def deleta_questao():
+    a = lista_questoes.curselection()
+    b = lista_valor.curselection()
+    c = lista_acertos.curselection()
+    d = lista_valor_por_acerto.curselection()
+
+    if a != ():
+
+        try:
+            lista_base_questao.remove(lista_questoes.get(a))
+            lista_base_questao_ordenada.remove(lista_questoes.get(a))
+
+            questao_valor.pop(lista_questoes.get(a))
+            questao_acertos.pop(lista_questoes.get(a))
+            questao_valorTotal.pop(lista_questoes.get(a))
+        except:
+            pass
+
+        lista_questoes.delete(a, last=None)
+        lista_valor.delete(a, last=None)
+        lista_acertos.delete(a, last=None)
+        lista_valor_por_acerto.delete(a, last=None)
+
+
+    elif b != ():
+        try:
+            lista_base_questao.remove(lista_questoes.get(b))
+            lista_base_questao_ordenada.remove(lista_questoes.get(b))
+
+            questao_valor.pop(lista_questoes.get(b))
+            questao_acertos.pop(lista_questoes.get(b))
+            questao_valorTotal.pop(lista_questoes.get(b))
+        except:
+            pass
+
+        lista_questoes.delete(b, last=None)
+        lista_valor.delete(b, last=None)
+        lista_acertos.delete(b, last=None)
+        lista_valor_por_acerto.delete(b, last=None)
+
+    elif c != ():
+        try:
+            lista_base_questao.remove(lista_questoes.get(c))
+            lista_base_questao_ordenada.remove(lista_questoes.get(c))
+
+            questao_valor.pop(lista_questoes.get(c))
+            questao_acertos.pop(lista_questoes.get(c))
+            questao_valorTotal.pop(lista_questoes.get(c))
+        except:
+            pass
+
+        lista_questoes.delete(c, last=None)
+        lista_valor.delete(c, last=None)
+        lista_acertos.delete(c, last=None)
+        lista_valor_por_acerto.delete(c, last=None)
+
+    elif d != ():
+        try:
+            lista_base_questao.remove(lista_questoes.get(d))
+            lista_base_questao_ordenada.remove(lista_questoes.get(d))
+
+            questao_valor.pop(lista_questoes.get(d))
+            questao_acertos.pop(lista_questoes.get(d))
+            questao_valorTotal.pop(lista_questoes.get(d))
+        except:
+            pass
+
+        lista_questoes.delete(d, last=None)
+        lista_valor.delete(d, last=None)
+        lista_acertos.delete(d, last=None)
+        lista_valor_por_acerto.delete(d, last=None)
+
+    # Repasso todos os valores do listbox de valor das questões para uma lista. dessa forma eu consigo fazer um loop para gerar a soma total
+    itens_da_lista_valor = lista_valor.get(0, END)
+    soma = 0.00
+    for i in itens_da_lista_valor:
+        soma = soma + float(i)
+    soma = round(soma, 1)
+    print(soma)
+    # Habilito o campo de valor total, insiro o valor da soma total, depois desabilito ele novamente.
+    entry_valor_total.config(state='normal')
+    entry_valor_total.delete(0, END)
+    entry_valor_total.insert(0, soma)
+    entry_valor_total.config(state='disable')
+
+    # Dependendo do resultado do campo total, o Label será de aviso por ter ultrapassado 10, ou de que restam ainda alguns pontos até chegar em dez:
+    if soma > 10:
+        lb_atencao['text'] = 'Atenção: você precisa reduzir o valor total das questões em ' + str(
+            (round(soma - 10, 1))) + ' pontos.'
+        lb_atencao.config(foreground='red', font=('arial', 10, 'bold'), bg='gray90')
+
+    elif soma < 10:
+        lb_atencao['text'] = 'Atenção: você ainda pode inserir o total de ' + str(round(10 - float(soma), 1)) + ' pontos.'
+        lb_atencao.config(foreground='blue', font=('arial', 10, 'bold'), bg='gray90')
+
+    elif soma == 10:
+        lb_atencao['text'] = 'Fechou 10 pontos! :)'
+        lb_atencao.config(foreground='green', font=('arial', 10, 'bold'), bg='gray90')
+
+    a = ''
+    b = ''
+    c = ''
+    d = ''
+
+
+def instrucoes():
+    instrucoes_window = Tk()
+    instrucoes_window.geometry('600x600+100+50')
+    instrucoes_window.title('Instruções')
+    instrucoes_window.config(bg='white')
+
+    lb_instrucoes1 = Label(instrucoes_window, text='Instruções', bg='white')
+    lb_instrucoes1.pack()
+
+    text_instrucoes = Text(instrucoes_window, width=590, height=500)
+    text_instrucoes.config(relief=RAISED, wrap=WORD)
+    text_instrucoes.pack()
+    text_instrucoes.config(state='normal')
+    text_instrucoes.delete(1.0, END)
+    text_instrucoes.insert(END, '''
+Bem-vindo(a) ao programa de cálculo de notas.
+
+Primeiro, informe o nome da prova e o valor da prova. O nome será utilizado para buscar a prova em consultas posteriores, por isso escolha um nome que facilitará sua busca. 
+
+O valor da prova é o peso que ela vai ter na avaliação dos alunos. Por exemplo, se a nota máxima de uma prova é 2 pontos, então informe "2". 
+
+Após os dados iniciais, insira as questões da prova: informe o número da questão, o valor e a quantidade de acertos possíveis para a questão.
+
+Importante: informe o valor das questões buscando somar um total de dez pontos. Por mais que a sua prova tenha um valor diferente de dez, pense nos valores a partir desta proporção. 
+
+Pensar os pesos a partir de um total de dez pontos facilita a distribuição dos valores das questões. Não se preocupe, ao final do cálculo, a nota do aluno será feita com base no valor da prova, ou seja, se um aluno tirar o total de 6 pontos de 10, e a prova valer 2 pontos, a nota final dele será 1,2.
+
+Após completar as informações da prova, clique para salvá-las e clique em "Iniciar seção de correção".''')
+    text_instrucoes.config(state='disable')
+
+    instrucoes_window.mainloop()
+
+
+def adiciona_questao(x, y, z, window):
+    global lista_base_questao
+    # Aqui trato verificações do campo "Questão":
+
+    if x.get() == '':
+        mensagem = 'Informe o número da questão!'
+        msgErro(mensagem)
+
+    if x.get() != '':
+        try:
+            valor = int(x.get())
+        except:
+            try:
+                valor = float(x.get())
+            except:
+                codigo_invalido = Tk()
+                codigo_invalido.title('Erro')
+                codigo_invalido.geometry('400x350+500+200')
+                codigo_invalido.resizable(width=False, height=False)
+                # lb_codigo_invalido = Label(codigo_invalido, text='')
+                # lb_codigo_invalido.pack(side=TOP)
+                text_erro = Text(codigo_invalido, width=44, height=18)
+                text_erro.config(relief=RAISED, wrap=WORD)
+                text_erro.place(x=0, y=0)
+                text_erro.config(state='normal')
+                text_erro.delete(1.0, END)
+                text_erro.insert(END, '''
+    As questões devem ser subdivididas apenas por valores numéricos!
+
+    Dica: se você deseja subdividir o valor de uma questão que possui mais de uma alternativa, por exemplo: '
+
+    Questão 1:
+         a)
+         b)
+         c)
+    Onde a questão a) deve valer dois pontos, e as questões b) e c) valem apenas um ponto. 
+
+    Você pode salvar as questões como "1.1", "1.2" e "1.3". 
+    ''')
+                text_erro.config(state='disable')
+                bt_codigo_invalido = Button(codigo_invalido, text='Ok', width=10, borderwidth=3,
+                                            command=lambda: kill_window(codigo_invalido))
+                bt_codigo_invalido.place(x=150, y=310)
+                x.delete(0, END)
+                codigo_invalido.mainloop()
+
+    # Aqui trato verificações do campo "Valor":
+
+    if y.get() == '':
+        mensagem = 'Informe o valor da questão!'
+        msgErro(mensagem)
+
+    valor_virgula = y.get()  # pega o valor de acertos, talvez o usuário digite com vírgulas
+
+    if y.get() != '':
+        try:
+            valor = int(valor_virgula.replace(',', '.'))
+        except:
+            try:
+                valor = float(valor_virgula.replace(',', '.'))
+            except:
+                mensagem = 'O valor da questão deve ser numérico!'
+                y.delete(0, END)
+                msgErro(mensagem)
+
+    ''  # Aqui trato verificações do campo "Acertos":
+
+    if z.get() != '':
+
+        try:
+            acertos = int(z.get())
+        except:
+            mensagem = 'A quantidade de acertos deve ser numérica e um valor inteiro!'
+            z.delete(0, END)
+            msgErro(mensagem)
+
+        if int(z.get()) <= 0:
+            msg = 'A quantidade de acertos deve ser maior que zero!'
+            msgErro(msg)
+
+    if z.get() == '':
+        mensagem = 'Informe a quantidade de acertos da questão!'
+        msgErro(mensagem)
+
+    # Se passar em todas as verificações, então:
+
+    if x.get() in lista_base_questao:
+        mensagem = 'Você já inseriu a questão ' + str(x.get()) + '.'
+        msgErro(mensagem)
+
+    # Aqui estou criando listas com os valores. Na verdade, a lista que mais importa é a das questões, pois vai ser a partir dela que vou ordenar a entrada dos valores nos listboxes:
+    try:
+        questao_para_lista_base = int(x.get().strip())
+    except:
+        questao_para_lista_base = float(x.get().strip())
+
+    btn_busca_prova.config(state = 'disable')
+
+    # questao_para_lista_base = float(x.get().strip())
+    lista_base_questao.append(questao_para_lista_base)
+    lista_base_valor.append(valor)
+    lista_base_acertos.append(z.get().strip())
+    lista_base_valor_por_acerto.append(round(float(valor) / acertos, 2))
+
+    # Os dicionários vão ser alimentados, garantindo que vou ter como chamar os dados corretos para a determinada questão que eu chamar na função seguinte:
+    questao_valor[questao_para_lista_base] = valor
+    questao_acertos[questao_para_lista_base] = z.get().strip()
+    questao_valorTotal[questao_para_lista_base] = round(float(valor) / acertos, 2)
+
+    # Aqui estou ordeno a minha lista de questões, para que ao usar a função de alimentar os listboxes, seja feito em ordem crescente.
+    lista_base_questao_ordenada = sorted(lista_base_questao)
+    # Vou deletar o conteúdo dos listboxes:
+    lista_questoes.delete(0, END)
+    lista_valor.delete(0, END)
+    lista_acertos.delete(0, END)
+    lista_valor_por_acerto.delete(0, END)
+
+    # Agora vou inserir os dados novamente, mas com um ordenamento correto. Vou chamar os valores a partir dos dicionários acima!
+    for i in lista_base_questao_ordenada:
+        lista_questoes.insert(END, i)
+        lista_valor.insert(END, questao_valor[i])
+        lista_acertos.insert(END, questao_acertos[i])
+        lista_valor_por_acerto.insert(END, questao_valorTotal[i])
+
+    # Repasso todos os valores do listbox de valor das questões para uma lista. dessa forma eu consigo fazer um loop para gerar a soma total
+    itens_da_lista_valor = lista_valor.get(0, END)
+    soma = 0.00
+    for i in itens_da_lista_valor:
+        soma = soma + float(i)
+    soma = round(soma, 1)
+    print(soma)
+    # Habilito o campo de valor total, insiro o valor da soma total, depois desabilito ele novamente.
+    entry_valor_total.config(state='normal')
+    entry_valor_total.delete(0, END)
+    entry_valor_total.insert(0, soma)
+    entry_valor_total.config(state='disable')
+
+    # Dependendo do resultado do campo total, o Label será de aviso por ter ultrapassado 10, ou de que restam ainda alguns pontos até chegar em dez:
+    if soma > 10:
+        lb_atencao['text'] = 'Atenção: você precisa reduzir o valor total das questões em ' + str(
+            (round(soma - 10, 1))) + ' pontos.'
+        lb_atencao.config(foreground='red', font=('arial', 10, 'bold'), bg='gray90')
+
+    elif soma < 10:
+        lb_atencao['text'] = 'Atenção: você ainda pode inserir o total de ' + str(round(10 - float(soma), 1)) + ' pontos.'
+        lb_atencao.config(foreground='blue', font=('arial', 10, 'bold'), bg='gray90')
+
+    elif soma == 10:
+        lb_atencao['text'] = 'Fechou 10 pontos! :)'
+        lb_atencao.config(foreground='green', font=('arial', 10, 'bold'), bg='gray90')
+
+    kill_window(window)
+
+
+def verifica_dados_iniciais():
+    if entry_nome_da_prova.get() == '':
+        mensagem = 'Preencha o campo "Nome da prova".'
+        msgErro(mensagem)
+
+
+    elif entry_valor_da_prova.get() == '':
+        mensagem = 'Preencha o campo "Valor da prova".'
+        msgErro(mensagem)
+
+
+    elif entry_valor_da_prova.get() != '':
+        try:
+            teste_valor_da_prova = float(entry_valor_da_prova.get())
+        except:
+            mensagem = 'O valor da prova deve ser numérico!'
+            msgErro(mensagem)
+
+
+def nova_questao(x):
+    """#crio isso apenas para atender a exigência do evento que dá um arguento para pra a função"""
+    a = x
+
+    if entry_nome_da_prova.get() == '':
+        mensagem = 'Preencha o campo "Nome da prova".'
+        msgErro(mensagem)
+
+
+    elif entry_valor_da_prova.get() == '':
+        mensagem = 'Preencha o campo "Valor da prova".'
+        msgErro(mensagem)
+
+
+    elif int(combo_ano_letivo.get()) not in lista_ano_letivo:
+        msg = 'Informe um ano letivo!'
+        msgErro(msg)
+
+    elif combo_divisao_ano.get() not in divisao_ano:
+        msg = 'Informe uma divisão para o ano letivo!'
+        msgErro(msg)
+
+    elif combo_divisao_periodo.get() not in divisao_periodo:
+        msg = 'Informe em qual ' + str(combo_divisao_ano.get()) + ' você está!'
+        msgErro(msg)
+
+    elif combo_turma.get() == '':
+        msg = 'Informe a turma da prova!'
+        msgErro(msg)
+
+    elif entry_valor_da_prova.get() != '':
+        verificacao_ok = 'ok'
+        try:
+            teste_valor_da_prova_virgula = entry_valor_da_prova.get()
+            teste_valor_da_prova = float(teste_valor_da_prova_virgula.replace(',', '.'))
+            if teste_valor_da_prova < 0.1:
+                mensagem = 'O valor da prova deve ser maior que zero'
+                msgErro(mensagem)
+                verificacao_ok = 'Erro'
+        except:
+            mensagem = 'O valor da prova deve ser numérico!'
+            msgErro(mensagem)
+            verificacao_ok = 'Erro'
+
+    if verificacao_ok == 'ok':
+
+        nova_questao = Tk()
+        nova_questao.title('Nova questão')
+        nova_questao.geometry('350x150+500+200')
+        nova_questao.resizable(width=FALSE, height=FALSE)
+
+        lb_questao_nova_questao = Label(nova_questao, text='Questão:', width=20, justify=LEFT, anchor=E)
+        lb_questao_nova_questao.place(x=0, y=0)
+
+        entry_nova_questao = Entry(nova_questao, width=20)
+        entry_nova_questao.place(x=150, y=0)
+        entry_nova_questao.bind('<Return>', press_tab)
+        ultima_questao = ''
+        try:
+            ultima_questao = lista_questoes.get(END)
+        except:
+            pass
+        if ultima_questao != '':
+            ultima_questao_mais_um = int(
+                ultima_questao) + 1  # serve apenas para eu pegar a quantidade de itens na lista de questões
+            entry_nova_questao.insert(0, ultima_questao_mais_um)
+
+        lb_valor_nova_questao = Label(nova_questao, text='Valor:', width=20, justify=LEFT, anchor=E)
+        lb_valor_nova_questao.place(x=0, y=30)
+
+        entry_valor_nova_questao = Entry(nova_questao, width=20)
+        entry_valor_nova_questao.place(x=150, y=30)
+        entry_valor_nova_questao.bind('<Return>', press_tab)
+
+        lb_acertos_nova_questao = Label(nova_questao, text='Quantidade de acertos:', width=20, justify=LEFT, anchor=E)
+        lb_acertos_nova_questao.place(x=0, y=60)
+
+        entry_acertos_nova_questao = Entry(nova_questao, width=20)
+        entry_acertos_nova_questao.place(x=150, y=60)
+        entry_acertos_nova_questao.bind('<Return>', press_tab)
+
+        btn_salva_questao = Button(nova_questao, text='Adicionar questão', borderwidth=3,
+                                   command=lambda: adiciona_questao(entry_nova_questao, entry_valor_nova_questao,
+                                                                    entry_acertos_nova_questao, nova_questao))
+        btn_salva_questao.place(x=150, y=90)
+
+        lb_atalho_btn = Label(nova_questao, text='(insert)')
+        lb_atalho_btn.place(x=270, y=93)
+        pyautogui.click(620, 240)
+        pyautogui.press('tab')
+
+        nova_questao.bind('<Insert>', click_adicionar_questao)
+
+        nova_questao.mainloop()
+
+
+# =====================================================Eventos root=====================================================
+
+
+root.bind('<Insert>', nova_questao)
+root.bind('<Control-p>', grava_nota_aluno)
+root.bind('<Control-n>', consulta_notas)
+root.bind('<Control-s>', salva_prova)
+
+# ====================================================Frames====================================================
+
+
+# ====================================================Labels configuração da prova==================================
+print('tela inicial lista nomes:')
+print(lista_nomes)
+lb_introducao = Label(root, text='Configurações da prova', bg=color, justify=LEFT,
+                      font=('arial', 15, 'bold'))
+lb_introducao.place(x=150, y=0)
+
+lb_nome_da_prova = Label(root, width=15, text='Nome da prova:', justify=RIGHT, anchor=W)
+lb_nome_da_prova.place(x=0, y=38)
+lb_valor_da_prova = Label(root, width=15, text='Valor da prova:', justify=RIGHT, anchor=W)
+lb_valor_da_prova.place(x=0, y=64)
+
+lb_ano_letivo = Label(root, text='Período:', width=9, justify=RIGHT, anchor=W)
+lb_ano_letivo.place(x=270, y=38)
+
+# Comboxes:
+lista_ano_letivo = [2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035,
+                    2036, 2037, 2038, 2039, 2040]
+combo_ano_letivo = ttk.Combobox(root, width=5, textvariable=anoLetivo, state="readonly")
+combo_ano_letivo['values'] = lista_ano_letivo
+combo_ano_letivo.place(x=345, y=38)
+
+combo_ano_letivo.bind("<<ComboboxSelected>>", atualiza_turmas)
+
+divisao_ano = ['Semestre', 'Trimestre', 'Bimestre']
+combo_divisao_ano = ttk.Combobox(root, width=8, state="readonly")
+combo_divisao_ano['values'] = divisao_ano
+combo_divisao_ano.place(x=405, y=38)
+
+combo_divisao_ano.bind("<<ComboboxSelected>>", atualiza_lista_divisao_periodo)
+
+divisao_periodo = ['1º', '2º', '3º', '4º']
+combo_divisao_periodo = ttk.Combobox(root, width=2, state="readonly")
+combo_divisao_periodo['values'] = divisao_periodo
+combo_divisao_periodo.place(x=485, y=38)
+
+# alimento o campo do combo ano letivo.
+wb = openpyxl.load_workbook(dir + '\\Dados_base\\planilha_modelo_de_dados.xlsx')
+sheet_ano_letivo = wb['ano_letivo_atual']
+ano = sheet_ano_letivo['A1'].value
+if ano == None:
+    combo_ano_letivo.set('')
+else:
+    combo_ano_letivo.set(str(ano))
+
+divisao_do_ano = sheet_ano_letivo['B1'].value
+if divisao_do_ano == None:
+    combo_divisao_ano.set('')
+else:
+    combo_divisao_ano.set(str(divisao_do_ano))
+
+divisao_do_periodo = sheet_ano_letivo['C1'].value
+if divisao_do_periodo == None:
+    combo_divisao_periodo.set('')
+else:
+    combo_divisao_periodo.set(str(divisao_do_periodo))
+
+lb_turma = Label(root, text='Turma:', width=9, justify=RIGHT, anchor=W)
+lb_turma.place(x=270, y=64)
+
+# Labels das listas:
+
+lb_questao = Label(root, text='Questão:', width=15, highlightbackground=color)
+lb_questao.place(x=30, y=138)
+
+lb_valor = Label(root, text='Valor:', width=15, highlightbackground=color)
+lb_valor.place(x=150, y=138)
+
+lb_acertos = Label(root, text='Qt de acertos:', width=15, highlightbackground=color)
+lb_acertos.place(x=270, y=138)
+
+lb_valor_por_acerto = Label(root, text='Valor por acerto:', width=15, highlightbackground=color)
+lb_valor_por_acerto.place(x=390, y=138)
+
+# Labels resultado final:
+lb_total = Label(root, text='Valor total =', width=15, bg=color,
+                 font=('arial', 13, 'bold'))
+lb_total.place(x=10, y=632)
+
+lb_atencao = Label(root, bg=color)
+lb_atencao.place(x=30, y=662)
+
+separator = Label(root, width=3, height=42, bg='gray90')
+separator.place(x=545, y=0)
+
+# ====================================================Labels dos alunos========================================
+
+# Labels introdução:
+
+lb_nome_do_aluno = Label(root, width=18, text='Nome do aluno:', justify=RIGHT, anchor=W)
+lb_nome_do_aluno.place(x=580, y=90)
+lb_valor_do_aluno = Label(root, width=12, text='Nota final:', justify=RIGHT,
+                          font=('arial', 12, 'bold'))
+lb_valor_do_aluno.place(x=580, y=185)
+
+# Seção de correção:
+
+lb_inserir_questao = Label(root, width=18, text='Questão a inserir:', justify=RIGHT, anchor=W)
+lb_inserir_questao.place(x=580, y=118)
+
+lb_inserir_acertos = Label(root, width=18, text='Acertos na questão:', justify=RIGHT, anchor=W)
+lb_inserir_acertos.place(x=580, y=146)
+
+# Labels das listas:
+
+lb_questao = Label(root, text='Questão:', width=15, highlightbackground=color)
+lb_questao.place(x=890, y=138)
+
+lb_acertos = Label(root, text='Qt de acertos:', width=15, highlightbackground=color)
+lb_acertos.place(x=1010, y=138)
+
+lb_valor_total = Label(root, text='Valor total:', width=15, highlightbackground=color)
+lb_valor_total.place(x=1130, y=138)
+
+# Labels resultado final:
+lb_total = Label(root, text='Valor total =', width=15, bg=color,
+                 font=('arial', 13, 'bold'))
+lb_total.place(x=990, y=632)
+
+# ====================================================Buttons configurações da prova=============================
+
+btn_instrucoes = Button(root, text='Instruções', borderwidth=3,
+                        command=lambda: instrucoes())
+btn_instrucoes.place(x=3, y=3)
+
+btn_adicionar_questao = Button(root, image=icone_mais, borderwidth=3,
+                               command=lambda: nova_questao('x'))
+btn_adicionar_questao.place(x=30, y=93)
+
+btn_deleta_questao = Button(root, image=icone_menos, borderwidth=3,
+                            command=deleta_questao)
+btn_deleta_questao.place(x=75, y=93)
+
+btn_edita_questao = Button(root, image=icone_editar, borderwidth=3,
+                           command=edita_questao)
+btn_edita_questao.place(x=120, y=93)
+
+btn_salva_prova = Button(root, text='Salvar prova', borderwidth=3,
+                         command=lambda: salva_prova('x'))
+btn_salva_prova.place(x=300, y=93)
+
+btn_busca_prova = Button(root, text='Carregar prova', borderwidth=3,
+                         command=lambda: lista_provas())
+btn_busca_prova.place(x=400, y=93)
+
+# ====================================================Buttons Alunos================================================================================
+
+btn_secao_correcao = Button(root, width=27, text='Iniciar seção de correção', borderwidth=6,
+                            font=('arial', 14, 'bold'), command=iniciar_correcao)
+btn_secao_correcao.place(x=580, y=3)
+
+btn_adicionar_questao_aluno = Button(root, text='?', borderwidth=3, font=('arial', 7, 'bold'),
+                               command=lambda: instrucoes_questao_aluno())  # image=icone_mais
+btn_adicionar_questao_aluno.place(x=845, y=146)
+
+btn_deleta_questao_aluno = Button(root, image=icone_menos, borderwidth=3,
+                                  command=deleta_questao_aluno)
+btn_deleta_questao_aluno.place(x=890, y=93)
+
+btn_edita_questao_aluno = Button(root, image=icone_editar, borderwidth=3,
+                                 command=edita_questao_aluno)
+btn_edita_questao_aluno.place(x=935, y=93)
+
+btn_grava_nota_aluno = Button(root, text='Gravar nota do aluno e próximo', borderwidth=3, state='disabled',
+                              font=('arial', 11, 'bold'),
+                              command=lambda: grava_nota_aluno('x'))
+btn_grava_nota_aluno.place(x=580, y=225)
+
+lb_grava_nota_aluno = Label(root, text='(ctrl + p)', bg=color)
+lb_grava_nota_aluno.place(x=820, y=228)
+
+btn_consultar_notas = Button(root, text='Consultar notas', borderwidth=3, state='disabled',
+                             font=('arial', 11, 'bold'),
+                             command=lambda: consulta_notas('x'))
+btn_consultar_notas.place(x=580, y=270)
+
+btn_consulta_lista_alunos = Button(root, text='?', borderwidth=3, font=('arial', 7, 'bold'),
+                             command=consulta_alunos)
+btn_consulta_lista_alunos.place(x=865, y=90)
+
+lb_consultar_notas = Label(root, text='(ctrl + n)', bg=color)
+lb_consultar_notas.place(x=710, y=273)
+# ====================================================Entrys configuração da prova==========================================================
+
+entry_nome_da_prova = Entry(root, width=18, textvariable=nome_da_prova,
+                            font=('arial', 10, 'bold'))
+entry_nome_da_prova.place(x=115, y=38)
+entry_nome_da_prova.bind('<Return>', press_tab)
+entry_valor_da_prova = Entry(root, width=18, textvariable=valor_da_prova,
+                             font=('arial', 10, 'bold'))
+entry_valor_da_prova.place(x=115, y=64)
+entry_valor_da_prova.bind('<Return>', press_tab)
+
+entry_valor_total = Entry(root, width=15, textvariable=valor_total, state='disabled',
+                          font=('arial', 10, 'bold'))
+entry_valor_total.place(x=150, y=632)
+
+# ====================================================Entrys notas dos alunos==========================================================
+
+
+search_var = StringVar()
+search_var.trace("w", update_list)
+
+entry_nome_do_aluno = ttk.Combobox(root, width=17, state='disabled', textvariable=search_var,
+                            font=('arial', 10, 'bold'))
+lista_nomes = sorted(lista_nomes)
+entry_nome_do_aluno['values'] = lista_nomes
+entry_nome_do_aluno.place(x=715, y=90)
+entry_nome_do_aluno.bind('<Return>', press_tab)
+
+
+
+update_list()
+
+# Seção correção:
+
+entry_inserir_questao = Entry(root, width=17, state='disabled',
+                              font=('arial', 10, 'bold'))
+entry_inserir_questao.place(x=715, y=118)
+entry_inserir_questao.bind('<Return>', press_tab)
+
+entry_inserir_acertos_automatico = Entry(root, width=17, state='disabled',
+                                         font=('arial', 10, 'bold'))
+entry_inserir_acertos_automatico.place(x=715, y=146)
+
+entry_inserir_acertos_automatico.bind('<Return>', adiciona_questao_aluno)
+
+entry_nota_do_aluno = Entry(root, width=14, state='disabled',
+                            font=('arial', 12, 'bold'))
+entry_nota_do_aluno.place(x=715, y=185)
+
+entry_nota_valor_total = Entry(root, width=15, state='disabled', font=('arial', 10, 'bold'))
+entry_nota_valor_total.place(x=1130, y=632)
+
+# ====================================================Texts====================================================================================
+
+# ====================================================Listboxes configuração da prova==========================================================
+
+lista_questoes = Listbox(root, width=12, height=24,
+                         font=(12))
+lista_questoes.place(x=30, y=165)
+
+lista_valor = Listbox(root, width=12, height=24,
+                      font=(12))
+lista_valor.place(x=150, y=165)
+
+lista_acertos = Listbox(root, width=12, height=24,
+                        font=(12))
+lista_acertos.place(x=270, y=165)
+
+lista_valor_por_acerto = Listbox(root, width=12, height=24,
+                                 font=(12))
+lista_valor_por_acerto.place(x=390, y=165)
+
+# ====================================================Listboxes configuração do aluno====================================
+
+lista_questoes_aluno = Listbox(root, width=12, height=24,
+                               font=(12))
+lista_questoes_aluno.place(x=890, y=165)
+
+lista_acertos_aluno = Listbox(root, width=12, height=24,
+                              font=(12))
+lista_acertos_aluno.place(x=1010, y=165)
+
+lista_total_questao_aluno = Listbox(root, width=12, height=24,
+                                    font=(12))
+lista_total_questao_aluno.place(x=1130, y=165)
+
+# ----------------------------------------------------Alimentar listas que vêm do excel------------------------------------------------------
+
+# Faço essa função de carregar a lista só ao final, para garantir que todas as variáveis foram carregadas antes:
+wb = openpyxl.load_workbook(dir + '\\Dados_base\\Turmas.xlsx')
+lista_turma = []
+if combo_ano_letivo.get() != '':
+    sheet_turma = wb[combo_ano_letivo.get()]
+    contador = 0
+    lista_de_turmas_excel = []
+
+    for i in range(0, 60):
+        contador = contador + 1
+        c = str(get_column_letter(1)) + str(contador)
+        lista_de_turmas_excel.append(sheet_turma[c].value)
+    for i in lista_de_turmas_excel:
+        if i != None:
+            lista_turma.append(i)
+# Depois de carregar a lista de provas, insiro o combo de turmas:
+combo_turma = ttk.Combobox(root, width=5, textvariable=turma)
+combo_turma['values'] = lista_turma
+combo_turma.place(x=345, y=64)
+
+combo_turma.bind("<<ComboboxSelected>>", atualiza_lista_alunos)
+
+root.mainloop()
